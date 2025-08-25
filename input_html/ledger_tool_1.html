@@ -1,0 +1,263 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Obsidian 账本工具</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      padding: 20px;
+      background-color: #f0f0f0;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    h2 {
+      margin-top: 0;
+      color: #333;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+    }
+    th, td {
+      padding: 10px;
+      text-align: left;
+      border-bottom: 1px solid #ddd;
+    }
+    th {
+      background-color: #f4f4f4;
+      font-weight: bold;
+    }
+    input, select {
+      padding: 8px;
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    input[type="number"] {
+      width: 100px;
+    }
+    button {
+      padding: 8px 16px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    .delete-btn {
+      background-color: #f44336;
+    }
+    .delete-btn:hover {
+      background-color: #d32f2f;
+    }
+    .input-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .input-row input, .input-row select {
+      flex: 1;
+    }
+    .input-row input[type="number"] {
+      flex: 0 0 100px;
+    }
+    .total-row {
+      font-weight: bold;
+      background-color: #e0f7fa;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>账本工具</h2>
+    <div class="input-row">
+      <input type="date" id="dateInput" required>
+      <input type="text" id="descInput" placeholder="描述" required>
+      <input type="number" id="amountInput" placeholder="金额" step="0.01" required>
+      <select id="categoryInput">
+        <option value="餐饮">餐饮</option>
+        <option value="交通">交通</option>
+        <option value="购物">购物</option>
+        <option value="其他">其他</option>
+      </select>
+      <button onclick="addEntry()">添加</button>
+    </div>
+    <table id="ledgerTable">
+      <thead>
+        <tr>
+          <th>日期</th>
+          <th>描述</th>
+          <th>金额</th>
+          <th>类别</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="ledgerBody"></tbody>
+      <tfoot>
+        <tr class="total-row">
+          <td colspan="2">总计</td>
+          <td id="totalAmount">0.00</td>
+          <td colspan="2"></td>
+        </tr>
+      </tfoot>
+    </table>
+    <button onclick="sendToObsidian()">写入到笔记</button>
+  </div>
+
+  <script>
+    function loadEntries() {
+      const entries = JSON.parse(localStorage.getItem('ledgerEntries') || '[]');
+      entries.forEach(entry => addEntryToTable(entry));
+      updateTotal();
+    }
+
+    function saveEntries() {
+      const rows = Array.from(document.querySelectorAll('#ledgerBody tr'));
+      const entries = rows.map(row => ({
+        date: row.cells[0].textContent,
+        description: row.cells[1].textContent,
+        amount: parseFloat(row.cells[2].textContent),
+        category: row.cells[3].textContent
+      }));
+      localStorage.setItem('ledgerEntries', JSON.stringify(entries));
+    }
+
+    function addEntryToTable(entry) {
+      const tableBody = document.getElementById('ledgerBody');
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td>${entry.date}</td>
+        <td>${entry.description}</td>
+        <td>${parseFloat(entry.amount).toFixed(2)}</td>
+        <td>${entry.category}</td>
+        <td><button class="delete-btn" onclick="deleteEntry(this)">删除</button></td>
+      `;
+      tableBody.appendChild(row);
+    }
+
+    function addEntry() {
+      const dateInput = document.getElementById('dateInput');
+      const descInput = document.getElementById('descInput');
+      const amountInput = document.getElementById('amountInput');
+      const categoryInput = document.getElementById('categoryInput');
+
+      if (!dateInput.value || !descInput.value || !amountInput.value) {
+        alert('请填写所有字段！');
+        return;
+      }
+
+      const entry = {
+        date: dateInput.value,
+        description: descInput.value,
+        amount: parseFloat(amountInput.value),
+        category: categoryInput.value
+      };
+
+      addEntryToTable(entry);
+      saveEntries();
+      updateTotal();
+
+      // 清空输入框
+      dateInput.value = '';
+      descInput.value = '';
+      amountInput.value = '';
+    }
+
+    function deleteEntry(button) {
+      button.parentElement.parentElement.remove();
+      saveEntries();
+      updateTotal();
+    }
+
+    function updateTotal() {
+      const rows = document.querySelectorAll('#ledgerBody tr');
+      let total = 0;
+      rows.forEach(row => {
+        total += parseFloat(row.cells[2].textContent) || 0;
+      });
+      document.getElementById('totalAmount').textContent = total.toFixed(2);
+    }
+
+    // 监听Enter键
+    document.getElementById('amountInput').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') addEntry();
+    });
+
+    // 页面加载时初始化
+    loadEntries();
+
+    // 发送数据到 Obsidian 的函数
+    function sendToObsidian() {
+      const rows = Array.from(document.querySelectorAll('#ledgerBody tr'));
+      const expenses = rows.map(row => ({
+        date: row.cells[0].textContent,
+        description: row.cells[1].textContent,
+        amount: parseFloat(row.cells[2].textContent),
+        category: row.cells[3].textContent
+      }));
+
+      if (window.parent) {
+        window.parent.postMessage({
+          type: 'write-to-note',
+          payload: { expenses }
+        }, '*'); // '*' 表示任何来源，生产环境中建议指定具体域名
+      } else {
+        alert('无法发送数据到 Obsidian，请确保嵌入在 iframe 中！');
+      }
+    }
+  </script>
+</body>
+</html>
