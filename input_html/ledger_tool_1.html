@@ -103,16 +103,32 @@
     .delete-btn:hover {
       background-color: #d32f2f;
     }
-    .input-row {
-      display: flex;
-      gap: 10px;
-      margin-bottom: 10px;
+    .input-row-table {
+      background-color: #f8f9fa;
+      border: 2px solid #007bff;
     }
-    .input-row input, .input-row select {
-      flex: 1;
+    .input-row-table td {
+      padding: 5px;
     }
-    .input-row input[type="number"] {
-      flex: 0 0 100px;
+    .input-row-table input, .input-row-table select {
+      width: 100%;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 4px;
+      font-size: 14px;
+    }
+
+    .add-btn {
+      background-color: #007bff;
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .add-btn:hover {
+      background-color: #0056b3;
     }
     .total-row {
       font-weight: bold;
@@ -123,112 +139,257 @@
 <body>
   <div class="container">
     <h2>账本工具</h2>
-    <div class="input-row">
-      <input type="date" id="dateInput" required>
-      <input type="text" id="descInput" placeholder="描述" required>
-      <input type="number" id="amountInput" placeholder="金额" step="0.01" required>
-      <select id="categoryInput">
-        <option value="餐饮">餐饮</option>
-        <option value="交通">交通</option>
-        <option value="购物">购物</option>
-        <option value="其他">其他</option>
-      </select>
-      <button onclick="addEntry()">添加</button>
+    <div style="margin-bottom: 10px;">
+      <button onclick="sendToObsidian()">写入到笔记</button>
+      <button onclick="loadFromObsidian()">读取笔记数据</button>
     </div>
     <table id="ledgerTable">
       <thead>
         <tr>
-          <th>日期</th>
+          <th>序号</th>
           <th>描述</th>
-          <th>金额</th>
+          <th>时间</th>
           <th>类别</th>
+          <th>收支类型</th>
+          <th>金额</th>
+          <th>备注</th>
           <th>操作</th>
         </tr>
       </thead>
-      <tbody id="ledgerBody"></tbody>
+      <tbody id="ledgerBody">
+        <!-- 输入行 -->
+        <tr class="input-row-table">
+          <td><span id="nextSequence">1</span></td>
+          <td><input type="text" id="descInput" placeholder="描述" required></td>
+          <td><input type="text" id="timeInput" placeholder="时间"></td>
+          <td>
+            <select id="categoryInput">
+              <option value="">选择类别</option>
+              <option value="房租">房租</option>
+              <option value="缴水费">缴水费</option>
+              <option value="缴电费">缴电费</option>
+              <option value="维修">维修</option>
+              <option value="其他">其他</option>
+            </select>
+          </td>
+          <td><span id="incomeType">支出</span></td>
+          <td><input type="number" id="amountInput" placeholder="金额" step="0.01" required></td>
+          <td><input type="text" id="remarksInput" placeholder="备注"></td>
+          <td><button onclick="addEntry()" class="add-btn">添加</button></td>
+        </tr>
+      </tbody>
       <tfoot>
         <tr class="total-row">
-          <td colspan="2">总计</td>
+          <td colspan="5">总计</td>
           <td id="totalAmount">0.00</td>
           <td colspan="2"></td>
         </tr>
       </tfoot>
     </table>
-    <button onclick="sendToObsidian()">写入到笔记</button>
   </div>
 
   <script>
-    function loadEntries() {
-      const entries = JSON.parse(localStorage.getItem('ledgerEntries') || '[]');
-      entries.forEach(entry => addEntryToTable(entry));
-      updateTotal();
-    }
-
-    function saveEntries() {
-      const rows = Array.from(document.querySelectorAll('#ledgerBody tr'));
-      const entries = rows.map(row => ({
-        date: row.cells[0].textContent,
-        description: row.cells[1].textContent,
-        amount: parseFloat(row.cells[2].textContent),
-        category: row.cells[3].textContent
-      }));
-      localStorage.setItem('ledgerEntries', JSON.stringify(entries));
-    }
+    // localStorage相关函数已移除，数据现在通过Obsidian笔记管理
 
     function addEntryToTable(entry) {
       const tableBody = document.getElementById('ledgerBody');
+      const inputRow = document.querySelector('.input-row-table');
       const row = document.createElement('tr');
       row.innerHTML = `
-        <td>${entry.date}</td>
+        <td>${entry.sequence}</td>
         <td>${entry.description}</td>
+        <td>${entry.time || ''}</td>
+        <td>${entry.category || ''}</td>
+        <td>${entry.incomeType}</td>
         <td>${parseFloat(entry.amount).toFixed(2)}</td>
-        <td>${entry.category}</td>
-        <td><button class="delete-btn" onclick="deleteEntry(this)">删除</button></td>
+        <td>${entry.remarks || ''}</td>
+        <td>
+          <button class="add-btn" onclick="addRowAfter(this)" style="margin-right: 5px;">添加</button>
+          <button class="delete-btn" onclick="deleteEntry(this)">删除</button>
+        </td>
       `;
-      tableBody.appendChild(row);
+      // 将新行插入到输入行之后
+      tableBody.insertBefore(row, inputRow.nextSibling);
     }
 
     function addEntry() {
-      const dateInput = document.getElementById('dateInput');
       const descInput = document.getElementById('descInput');
+      const timeInput = document.getElementById('timeInput');
       const amountInput = document.getElementById('amountInput');
       const categoryInput = document.getElementById('categoryInput');
+      const remarksInput = document.getElementById('remarksInput');
 
-      if (!dateInput.value || !descInput.value || !amountInput.value) {
-        alert('请填写所有字段！');
+      if (!descInput.value || !amountInput.value) {
+        alert('请填写必需字段：描述、金额！');
         return;
       }
 
+      const amount = parseFloat(amountInput.value);
+      const incomeType = amount >= 0 ? '收入' : '支出';
+      const sequence = getNextSequence();
+
       const entry = {
-        date: dateInput.value,
+        sequence: sequence,
         description: descInput.value,
-        amount: parseFloat(amountInput.value),
-        category: categoryInput.value
+        time: timeInput.value,
+        category: categoryInput.value,
+        incomeType: incomeType,
+        amount: amount,
+        remarks: remarksInput.value
       };
 
       addEntryToTable(entry);
-      saveEntries();
       updateTotal();
+      updateNextSequence();
 
       // 清空输入框
-      dateInput.value = '';
       descInput.value = '';
+      timeInput.value = '';
       amountInput.value = '';
+      remarksInput.value = '';
+      
+      // 重置收支类型显示
+      updateIncomeTypeDisplay();
     }
 
     function deleteEntry(button) {
       button.parentElement.parentElement.remove();
-      saveEntries();
       updateTotal();
+      updateNextSequence();
+      updateSequenceNumbers();
+    }
+
+    // 在指定行后添加新行
+    function addRowAfter(button) {
+      const currentRow = button.parentElement.parentElement;
+      const newRow = document.createElement('tr');
+      const nextSeq = getMaxSequence() + 1;
+      
+      newRow.innerHTML = `
+        <td>${nextSeq}</td>
+        <td><input type="text" placeholder="描述" required></td>
+        <td><input type="text" placeholder="时间"></td>
+        <td>
+          <select>
+            <option value="">选择类别</option>
+            <option value="房租">房租</option>
+            <option value="缴水费">缴水费</option>
+            <option value="缴电费">缴电费</option>
+            <option value="维修">维修</option>
+            <option value="其他">其他</option>
+          </select>
+        </td>
+        <td>支出</td>
+        <td><input type="number" placeholder="金额" step="0.01" required></td>
+        <td><input type="text" placeholder="备注"></td>
+        <td>
+          <button class="add-btn" onclick="saveNewRow(this)" style="margin-right: 5px;">保存</button>
+          <button class="delete-btn" onclick="cancelNewRow(this)">取消</button>
+        </td>
+      `;
+      
+      // 插入到当前行之后
+      currentRow.parentNode.insertBefore(newRow, currentRow.nextSibling);
+    }
+
+    // 保存新行
+    function saveNewRow(button) {
+      const row = button.parentElement.parentElement;
+      const inputs = row.querySelectorAll('input, select');
+      
+      const description = inputs[0].value;
+      const time = inputs[1].value;
+      const category = inputs[2].value;
+      const amount = parseFloat(inputs[3].value);
+      const remarks = inputs[4].value;
+      
+      if (!description || !amount) {
+        alert('请填写必需字段：描述、金额！');
+        return;
+      }
+      
+      const sequence = row.cells[0].textContent;
+      const incomeType = amount >= 0 ? '收入' : '支出';
+      
+      // 替换为数据行
+      row.innerHTML = `
+        <td>${sequence}</td>
+        <td>${description}</td>
+        <td>${time || ''}</td>
+        <td>${category || ''}</td>
+        <td>${incomeType}</td>
+        <td>${amount.toFixed(2)}</td>
+        <td>${remarks || ''}</td>
+        <td>
+          <button class="add-btn" onclick="addRowAfter(this)" style="margin-right: 5px;">添加</button>
+          <button class="delete-btn" onclick="deleteEntry(this)">删除</button>
+        </td>
+      `;
+      
+      updateTotal();
+      updateNextSequence();
+    }
+
+    // 取消新行
+    function cancelNewRow(button) {
+      button.parentElement.parentElement.remove();
+    }
+
+    // 获取最大序号
+    function getMaxSequence() {
+      const rows = document.querySelectorAll('#ledgerBody tr:not(.input-row-table)');
+      let maxSeq = 0;
+      rows.forEach(row => {
+        const seq = parseInt(row.cells[0].textContent) || 0;
+        if (seq > maxSeq) maxSeq = seq;
+      });
+      return maxSeq;
+    }
+
+    // 更新所有行的序号
+    function updateSequenceNumbers() {
+      const rows = document.querySelectorAll('#ledgerBody tr:not(.input-row-table)');
+      rows.forEach((row, index) => {
+        row.cells[0].textContent = index + 1;
+      });
     }
 
     function updateTotal() {
-      const rows = document.querySelectorAll('#ledgerBody tr');
+      const rows = document.querySelectorAll('#ledgerBody tr:not(.input-row-table)');
       let total = 0;
       rows.forEach(row => {
-        total += parseFloat(row.cells[2].textContent) || 0;
+        total += parseFloat(row.cells[5].textContent) || 0; // 金额现在在第6列（索引5）
       });
       document.getElementById('totalAmount').textContent = total.toFixed(2);
+    }
+
+    // 获取下一个序号
+    function getNextSequence() {
+      const rows = document.querySelectorAll('#ledgerBody tr:not(.input-row-table)');
+      return rows.length + 1;
+    }
+
+    // 更新下一个序号显示
+    function updateNextSequence() {
+      const nextSeq = getNextSequence();
+      document.getElementById('nextSequence').textContent = nextSeq;
+    }
+
+    // 根据金额自动更新收支类型显示
+    function updateIncomeTypeDisplay() {
+      const amountInput = document.getElementById('amountInput');
+      const incomeTypeSpan = document.getElementById('incomeType');
+      
+      amountInput.addEventListener('input', function() {
+        const amount = parseFloat(this.value);
+        if (isNaN(amount)) {
+          incomeTypeSpan.textContent = '支出';
+        } else if (amount >= 0) {
+          incomeTypeSpan.textContent = '收入';
+        } else {
+          incomeTypeSpan.textContent = '支出';
+        }
+      });
     }
 
     // 监听Enter键
@@ -237,27 +398,57 @@
     });
 
     // 页面加载时初始化
-    loadEntries();
+    window.addEventListener('load', function() {
+      updateIncomeTypeDisplay();
+    });
 
     // 发送数据到 Obsidian 的函数
     function sendToObsidian() {
-      const rows = Array.from(document.querySelectorAll('#ledgerBody tr'));
+      const rows = Array.from(document.querySelectorAll('#ledgerBody tr:not(.input-row-table)'));
       const expenses = rows.map(row => ({
-        date: row.cells[0].textContent,
+        sequence: row.cells[0].textContent,
         description: row.cells[1].textContent,
-        amount: parseFloat(row.cells[2].textContent),
-        category: row.cells[3].textContent
+        time: row.cells[2].textContent,
+        category: row.cells[3].textContent,
+        incomeType: row.cells[4].textContent,
+        amount: parseFloat(row.cells[5].textContent),
+        remarks: row.cells[6].textContent
       }));
 
       if (window.parent) {
         window.parent.postMessage({
           type: 'write-to-note',
           payload: { expenses }
-        }, '*'); // '*' 表示任何来源，生产环境中建议指定具体域名
+        }, '*');
       } else {
         alert('无法发送数据到 Obsidian，请确保嵌入在 iframe 中！');
       }
     }
+
+    // 从 Obsidian 读取数据的函数
+    function loadFromObsidian() {
+      if (window.parent) {
+        window.parent.postMessage({
+          type: 'read-from-note'
+        }, '*');
+      } else {
+        alert('无法从 Obsidian 读取数据，请确保嵌入在 iframe 中！');
+      }
+    }
+
+    // 监听来自 Obsidian 的消息
+    window.addEventListener('message', (event) => {
+      if (event.data.type === 'note-data-response') {
+        const expenses = event.data.payload.expenses || [];
+        // 清空现有数据行，保留输入行
+        const dataRows = document.querySelectorAll('#ledgerBody tr:not(.input-row-table)');
+        dataRows.forEach(row => row.remove());
+        // 加载数据到表格
+        expenses.forEach(entry => addEntryToTable(entry));
+        updateTotal();
+        updateNextSequence();
+      }
+    });
   </script>
 </body>
 </html>
