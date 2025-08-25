@@ -31,10 +31,18 @@ export default class NoteWriterPlugin extends Plugin {
 
     let content = await this.app.vault.read(file);
     const expenses = payload.expenses || [];
+    const template = payload.template || {
+      title: '支出记录（从表格写入）',
+      headers: ['序号', '描述', '时间', '类别', '收支类型', '金额', '备注']
+    };
+    
     console.log('接收到的expenses数据:', expenses);
+    console.log('使用模板:', template);
+    
     let total = expenses.reduce((sum: number, exp: any) => sum + (exp.amount || 0), 0);
 
-    let table = '## 支出记录（从表格写入）\n\n| 序号 | 描述 | 时间 | 类别 | 收支类型 | 金额 | 备注 |\n|------|------|------|------|------|------|------|\n';
+    // 使用模板动态生成表格
+    let table = `## ${template.title}\n\n| ${template.headers.join(' | ')} |\n|${template.headers.map(() => '------').join('|')}|\n`;
     expenses.forEach((exp: any) => {
       table += `| ${exp.sequence} | ${exp.description} | ${exp.time} | ${exp.category} | ${exp.incomeType} | ${exp.amount} | ${exp.remarks || ''} |\n`;
     });
@@ -42,7 +50,7 @@ export default class NoteWriterPlugin extends Plugin {
 
     console.log('生成的表格内容:', table);
 
-    const marker = '## 支出记录（从表格写入）';
+    const marker = `## ${template.title}`;
     const markerIndex = content.indexOf(marker);
     console.log('标记位置:', markerIndex);
     

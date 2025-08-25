@@ -118,17 +118,55 @@
       font-size: 14px;
     }
 
+    .btn {
+      border: none;
+      padding: 3px 6px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 11px;
+      margin: 1px;
+      min-width: 35px;
+      transition: all 0.2s;
+    }
     .add-btn {
       background-color: #007bff;
       color: white;
-      border: none;
-      padding: 6px 12px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 14px;
     }
     .add-btn:hover {
       background-color: #0056b3;
+    }
+    .edit-btn {
+      background-color: #28a745;
+      color: white;
+    }
+    .edit-btn:hover {
+      background-color: #218838;
+    }
+    .delete-btn {
+      background-color: #dc3545;
+      color: white;
+    }
+    .delete-btn:hover {
+      background-color: #c82333;
+    }
+    .save-btn {
+      background-color: #17a2b8;
+      color: white;
+    }
+    .save-btn:hover {
+      background-color: #138496;
+    }
+    .cancel-btn {
+      background-color: #6c757d;
+      color: white;
+    }
+    .cancel-btn:hover {
+      background-color: #5a6268;
+    }
+    .operation-cell {
+      white-space: nowrap;
+      min-width: 105px;
+      text-align: center;
     }
     .total-row {
       font-weight: bold;
@@ -142,6 +180,7 @@
     <div style="margin-bottom: 10px;">
       <button onclick="sendToObsidian()">写入到笔记</button>
       <button onclick="loadFromObsidian()">读取笔记数据</button>
+      <button onclick="showTemplate()">查看模板</button>
     </div>
     <table id="ledgerTable">
       <thead>
@@ -175,7 +214,7 @@
           <td><span id="incomeType">支出</span></td>
           <td><input type="number" id="amountInput" placeholder="金额" step="0.01" required></td>
           <td><input type="text" id="remarksInput" placeholder="备注"></td>
-          <td><button onclick="addEntry()" class="add-btn">添加</button></td>
+          <td class="operation-cell"><button onclick="addEntry()" class="btn add-btn">加</button></td>
         </tr>
       </tbody>
       <tfoot>
@@ -203,9 +242,10 @@
         <td>${entry.incomeType}</td>
         <td>${parseFloat(entry.amount).toFixed(2)}</td>
         <td>${entry.remarks || ''}</td>
-        <td>
-          <button class="add-btn" onclick="addRowAfter(this)" style="margin-right: 5px;">添加</button>
-          <button class="delete-btn" onclick="deleteEntry(this)">删除</button>
+        <td class="operation-cell">
+          <button class="btn add-btn" onclick="addRowAfter(this)">加</button>
+          <button class="btn edit-btn" onclick="editEntry(this)">改</button>
+          <button class="btn delete-btn" onclick="deleteEntry(this)">删</button>
         </td>
       `;
       // 将新行插入到输入行之后
@@ -282,9 +322,9 @@
         <td>支出</td>
         <td><input type="number" placeholder="金额" step="0.01" required></td>
         <td><input type="text" placeholder="备注"></td>
-        <td>
-          <button class="add-btn" onclick="saveNewRow(this)" style="margin-right: 5px;">保存</button>
-          <button class="delete-btn" onclick="cancelNewRow(this)">取消</button>
+        <td class="operation-cell">
+          <button class="btn save-btn" onclick="saveNewRow(this)">存</button>
+          <button class="btn cancel-btn" onclick="cancelNewRow(this)">消</button>
         </td>
       `;
       
@@ -320,9 +360,10 @@
         <td>${incomeType}</td>
         <td>${amount.toFixed(2)}</td>
         <td>${remarks || ''}</td>
-        <td>
-          <button class="add-btn" onclick="addRowAfter(this)" style="margin-right: 5px;">添加</button>
-          <button class="delete-btn" onclick="deleteEntry(this)">删除</button>
+        <td class="operation-cell">
+          <button class="btn add-btn" onclick="addRowAfter(this)">加</button>
+          <button class="btn edit-btn" onclick="editEntry(this)">改</button>
+          <button class="btn delete-btn" onclick="deleteEntry(this)">删</button>
         </td>
       `;
       
@@ -352,6 +393,107 @@
       rows.forEach((row, index) => {
         row.cells[0].textContent = index + 1;
       });
+    }
+
+    // 编辑条目
+    function editEntry(button) {
+      const row = button.parentElement.parentElement;
+      const cells = row.cells;
+      
+      // 保存原始数据
+      const originalData = {
+        sequence: cells[0].textContent,
+        description: cells[1].textContent,
+        time: cells[2].textContent,
+        category: cells[3].textContent,
+        incomeType: cells[4].textContent,
+        amount: cells[5].textContent,
+        remarks: cells[6].textContent
+      };
+      
+      // 转换为编辑模式
+      row.innerHTML = `
+        <td>${originalData.sequence}</td>
+        <td><input type="text" value="${originalData.description}" required></td>
+        <td><input type="text" value="${originalData.time}"></td>
+        <td>
+          <select>
+            <option value="">选择类别</option>
+            <option value="房租" ${originalData.category === '房租' ? 'selected' : ''}>房租</option>
+            <option value="缴水费" ${originalData.category === '缴水费' ? 'selected' : ''}>缴水费</option>
+            <option value="缴电费" ${originalData.category === '缴电费' ? 'selected' : ''}>缴电费</option>
+            <option value="维修" ${originalData.category === '维修' ? 'selected' : ''}>维修</option>
+            <option value="其他" ${originalData.category === '其他' ? 'selected' : ''}>其他</option>
+          </select>
+        </td>
+        <td>${originalData.incomeType}</td>
+        <td><input type="number" value="${originalData.amount}" step="0.01" required></td>
+        <td><input type="text" value="${originalData.remarks}"></td>
+        <td class="operation-cell">
+          <button class="btn save-btn" onclick="saveEdit(this)">存</button>
+          <button class="btn cancel-btn" onclick="cancelEdit(this, ${JSON.stringify(originalData).replace(/"/g, '&quot;')})">消</button>
+        </td>
+      `;
+    }
+
+    // 保存编辑
+    function saveEdit(button) {
+      const row = button.parentElement.parentElement;
+      const inputs = row.querySelectorAll('input, select');
+      
+      const description = inputs[0].value;
+      const time = inputs[1].value;
+      const category = inputs[2].value;
+      const amount = parseFloat(inputs[3].value);
+      const remarks = inputs[4].value;
+      
+      if (!description || !amount) {
+        alert('请填写必需字段：描述、金额！');
+        return;
+      }
+      
+      const sequence = row.cells[0].textContent;
+      const incomeType = amount >= 0 ? '收入' : '支出';
+      
+      // 替换为数据行
+      row.innerHTML = `
+        <td>${sequence}</td>
+        <td>${description}</td>
+        <td>${time || ''}</td>
+        <td>${category || ''}</td>
+        <td>${incomeType}</td>
+        <td>${amount.toFixed(2)}</td>
+        <td>${remarks || ''}</td>
+        <td class="operation-cell">
+          <button class="btn add-btn" onclick="addRowAfter(this)">加</button>
+          <button class="btn edit-btn" onclick="editEntry(this)">改</button>
+          <button class="btn delete-btn" onclick="deleteEntry(this)">删</button>
+        </td>
+      `;
+      
+      updateTotal();
+    }
+
+    // 取消编辑
+    function cancelEdit(button, originalDataStr) {
+      const row = button.parentElement.parentElement;
+      const originalData = JSON.parse(originalDataStr.replace(/&quot;/g, '"'));
+      
+      // 恢复原始数据
+      row.innerHTML = `
+        <td>${originalData.sequence}</td>
+        <td>${originalData.description}</td>
+        <td>${originalData.time}</td>
+        <td>${originalData.category}</td>
+        <td>${originalData.incomeType}</td>
+        <td>${originalData.amount}</td>
+        <td>${originalData.remarks}</td>
+        <td class="operation-cell">
+          <button class="btn add-btn" onclick="addRowAfter(this)">加</button>
+          <button class="btn edit-btn" onclick="editEntry(this)">改</button>
+          <button class="btn delete-btn" onclick="deleteEntry(this)">删</button>
+        </td>
+      `;
     }
 
     function updateTotal() {
@@ -397,6 +539,31 @@
       if (e.key === 'Enter') addEntry();
     });
 
+    // 模板配置
+    const TABLE_TEMPLATE = {
+      title: '收支记录',
+      headers: ['序号', '描述', '时间', '类别', '收支类型', '金额', '备注']
+    };
+
+    // 查看模板
+    function showTemplate() {
+      const templateInfo = `
+表格模板信息：
+- 标题：${TABLE_TEMPLATE.title}
+- 列头：${TABLE_TEMPLATE.headers.join(' | ')}
+- 格式：Markdown 表格
+
+示例输出：
+## ${TABLE_TEMPLATE.title}
+
+| ${TABLE_TEMPLATE.headers.join(' | ')} |
+|${TABLE_TEMPLATE.headers.map(() => '------').join('|')}|
+| 1 | 示例描述 | 2025-01-15 | 房租 | 支出 | -1000.00 | 示例备注 |
+| **总计** | | | | | **-1000.00** | |
+      `;
+      alert(templateInfo);
+    }
+
     // 页面加载时初始化
     window.addEventListener('load', function() {
       updateIncomeTypeDisplay();
@@ -418,7 +585,10 @@
       if (window.parent) {
         window.parent.postMessage({
           type: 'write-to-note',
-          payload: { expenses }
+          payload: { 
+            expenses,
+            template: TABLE_TEMPLATE
+          }
         }, '*');
       } else {
         alert('无法发送数据到 Obsidian，请确保嵌入在 iframe 中！');
